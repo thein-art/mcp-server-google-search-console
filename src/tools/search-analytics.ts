@@ -408,7 +408,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
       // --- Comparison mode ---
       const finalLimit = row_limit ?? 1000;
       // Oversample: fetch more rows per API call to ensure complete joins
-      const apiLimit = Math.max(finalLimit * 3, 2000);
+      const apiLimit = Math.min(Math.max(finalLimit * 3, 2000), 25000);
 
       const currentBody = buildBody(resolvedStart, resolvedEnd);
       currentBody.rowLimit = apiLimit;

@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, chmod } from "node:fs/promises";
 import { createServer } from "node:http";
 import { sign, createPrivateKey, randomBytes } from "node:crypto";
 import { homedir } from "node:os";
@@ -12,6 +12,8 @@ import type {
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const ALLOWED_GOOGLE_TOKEN_HOSTS = ["oauth2.googleapis.com"];
+const ALLOWED_GOOGLE_AUTH_HOSTS = ["accounts.google.com"];
 const TOKEN_LIFETIME_SEC = 3600;
 const REFRESH_MARGIN_SEC = 300;
 
@@ -20,6 +22,35 @@ const WRITE_SCOPE = "https://www.googleapis.com/auth/webmasters";
 
 const DEFAULT_TOKEN_DIR = join(homedir(), ".config", "gsc-mcp");
 const DEFAULT_TOKEN_FILE = "oauth-token.json";
+
+// ---------------------------------------------------------------------------
+// Security helpers
+// ---------------------------------------------------------------------------
+
+/** Validate that a URL points to an allowed Google host (SSRF prevention). */
+function validateGoogleUrl(url: string | undefined, fallback: string, allowedHosts: string[]): string {
+  if (!url) return fallback;
+  try {
+    const parsed = new URL(url);
+    if (!allowedHosts.includes(parsed.hostname)) {
+      throw new Error(
+        `Untrusted URL "${parsed.hostname}" in OAuth client config. Expected one of: ${allowedHosts.join(", ")}. ` +
+        "This could indicate a tampered client config file.",
+      );
+    }
+    return url;
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Untrusted URL")) throw e;
+    throw new Error(`Invalid URL in OAuth client config: "${url}".`);
+  }
+}
+
+const SEC_HEADERS: Record<string, string> = {
+  "Content-Type": "text/html",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "default-src 'none'",
+};
 
 // ---------------------------------------------------------------------------
 // Scope helpers (shared by both auth methods)
@@ -78,7 +109,14 @@ export async function loadServiceAccountKey(): Promise<ServiceAccountKey> {
   const inline = process.env["GSC_SERVICE_ACCOUNT_KEY"];
   if (inline) {
     delete process.env["GSC_SERVICE_ACCOUNT_KEY"];
-    return validateServiceAccountKey(JSON.parse(inline));
+    try {
+      return validateServiceAccountKey(JSON.parse(inline));
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        throw new Error("GSC_SERVICE_ACCOUNT_KEY is not valid JSON.");
+      }
+      throw e;
+    }
   }
 
   const filePath = process.env["GSC_SERVICE_ACCOUNT_KEY_FILE"];
@@ -89,7 +127,14 @@ export async function loadServiceAccountKey(): Promise<ServiceAccountKey> {
   }
 
   const raw = await readFile(filePath, "utf-8");
-  return validateServiceAccountKey(JSON.parse(raw));
+  try {
+    return validateServiceAccountKey(JSON.parse(raw));
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      throw new Error(`Service account key file "${filePath}" is not valid JSON.`);
+    }
+    throw e;
+  }
 }
 
 function createJwt(key: ServiceAccountKey, scope: string): string {
@@ -186,14 +231,33 @@ export function getOAuthTokenPath(): string {
 }
 
 export async function loadOAuthConfig(filePath: string): Promise<OAuthClientConfig> {
-  const raw = await readFile(filePath, "utf-8");
-  const data = JSON.parse(raw) as OAuthClientConfig;
+  let raw: string;
+  try {
+    raw = await readFile(filePath, "utf-8");
+  } catch {
+    throw new Error(`Cannot read OAuth client config file: "${filePath}".`);
+  }
+
+  let data: OAuthClientConfig;
+  try {
+    data = JSON.parse(raw) as OAuthClientConfig;
+  } catch {
+    throw new Error(`OAuth client config at "${filePath}" is not valid JSON.`);
+  }
 
   if (!data.installed?.client_id || !data.installed?.client_secret) {
     throw new Error(
       `OAuth client config at "${filePath}" is invalid. Expected "installed" type with client_id and client_secret.`,
     );
   }
+
+  // Validate that auth/token URIs point to Google (SSRF prevention)
+  data.installed.token_uri = validateGoogleUrl(
+    data.installed.token_uri, GOOGLE_TOKEN_URL, ALLOWED_GOOGLE_TOKEN_HOSTS,
+  );
+  data.installed.auth_uri = validateGoogleUrl(
+    data.installed.auth_uri, GOOGLE_AUTH_URL, ALLOWED_GOOGLE_AUTH_HOSTS,
+  );
 
   return data;
 }
@@ -212,8 +276,11 @@ export async function loadSavedToken(): Promise<OAuthTokenData | null> {
 
 async function saveToken(token: OAuthTokenData): Promise<void> {
   const tokenPath = getOAuthTokenPath();
-  await mkdir(dirname(tokenPath), { recursive: true, mode: 0o700 });
+  const dir = dirname(tokenPath);
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
   await writeFile(tokenPath, JSON.stringify(token, null, 2), { mode: 0o600 });
+  await chmod(tokenPath, 0o600);
 }
 
 export async function refreshOAuthToken(
@@ -354,12 +421,18 @@ export async function runInteractiveOAuthFlow(
 function waitForAuthCode(port: number, expectedState: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const server = createServer((req, res) => {
+      if (req.method !== "GET") {
+        res.writeHead(405, SEC_HEADERS);
+        res.end("<h1>Method not allowed</h1>");
+        return;
+      }
+
       const url = new URL(req.url ?? "/", `http://localhost:${port}`);
 
       const error = url.searchParams.get("error");
       if (error) {
         const safe = error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        res.writeHead(400, { "Content-Type": "text/html" });
+        res.writeHead(400, SEC_HEADERS);
         res.end(`<h1>Authorization failed</h1><p>${safe}</p><p>You can close this tab.</p>`);
         server.close();
         reject(new Error(`OAuth authorization denied: ${error}`));
@@ -370,20 +443,20 @@ function waitForAuthCode(port: number, expectedState: string): Promise<string> {
       const state = url.searchParams.get("state");
 
       if (!code) {
-        res.writeHead(400, { "Content-Type": "text/html" });
+        res.writeHead(400, SEC_HEADERS);
         res.end("<h1>Missing authorization code</h1><p>You can close this tab.</p>");
         return; // Don't close server — might be a favicon request etc.
       }
 
       if (state !== expectedState) {
-        res.writeHead(400, { "Content-Type": "text/html" });
+        res.writeHead(400, SEC_HEADERS);
         res.end("<h1>State mismatch</h1><p>Possible CSRF attack. You can close this tab.</p>");
         server.close();
         reject(new Error("OAuth state mismatch — possible CSRF."));
         return;
       }
 
-      res.writeHead(200, { "Content-Type": "text/html" });
+      res.writeHead(200, SEC_HEADERS);
       res.end(
         "<h1>Authorization successful!</h1><p>You can close this tab and return to the terminal.</p>",
       );
