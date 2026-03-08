@@ -1,0 +1,17 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      GSC_SERVICE_ACCOUNT_KEY_FILE:
+        type: string
+        description: Path to Google service account JSON key file
+      GSC_SERVICE_ACCOUNT_KEY:
+        type: string
+        description: Inline service account JSON (alternative to key file)
+      GSC_SCOPES:
+        type: string
+        description: "OAuth scope. Default: webmasters.readonly"
+  commandFunction:
+    |-
+    (config) => ({ command: 'node', args: ['dist/index.js'], env: config })

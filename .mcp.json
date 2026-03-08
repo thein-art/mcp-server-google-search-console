@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "google-search-console": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "GSC_OAUTH_CLIENT_FILE": "${GSC_OAUTH_CLIENT_FILE}"
+      }
+    }
+  }
+}
