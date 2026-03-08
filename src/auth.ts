@@ -358,8 +358,9 @@ function waitForAuthCode(port: number, expectedState: string): Promise<string> {
 
       const error = url.searchParams.get("error");
       if (error) {
+        const safe = error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         res.writeHead(400, { "Content-Type": "text/html" });
-        res.end(`<h1>Authorization failed</h1><p>${error}</p><p>You can close this tab.</p>`);
+        res.end(`<h1>Authorization failed</h1><p>${safe}</p><p>You can close this tab.</p>`);
         server.close();
         reject(new Error(`OAuth authorization denied: ${error}`));
         return;
@@ -388,6 +389,14 @@ function waitForAuthCode(port: number, expectedState: string): Promise<string> {
       );
       server.close();
       resolve(code);
+    });
+
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(`OAuth callback port ${port} is already in use. Close the other process or set a different port.`));
+      } else {
+        reject(new Error(`OAuth callback server error: ${err.message}`));
+      }
     });
 
     server.listen(port, "127.0.0.1");

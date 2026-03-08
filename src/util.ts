@@ -67,6 +67,35 @@ export function toolError(e: unknown) {
   };
 }
 
+// --- Shared Metrics Helpers ---
+
+export interface Metrics {
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export function roundMetrics(r: Metrics): Metrics {
+  return {
+    clicks: r.clicks,
+    impressions: r.impressions,
+    ctr: Math.round(r.ctr * 10000) / 10000,
+    position: Math.round(r.position * 10) / 10,
+  };
+}
+
+export function formatNum(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+export function pctChange(cur: number, prev: number): string {
+  if (prev === 0) return cur === 0 ? "0%" : "+∞";
+  const pct = ((cur - prev) / prev) * 100;
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${Math.round(pct * 10) / 10}%`;
+}
+
 // --- URL Encoding ---
 
 export function encodeSiteUrl(siteUrl: string): string {

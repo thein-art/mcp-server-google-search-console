@@ -15,34 +15,11 @@ import {
   daysAgo,
   today,
   validateDateRange,
+  roundMetrics,
+  formatNum,
+  pctChange,
 } from "../util.js";
-
-interface Metrics {
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  position: number;
-}
-
-function roundMetrics(r: Metrics): Metrics {
-  return {
-    clicks: r.clicks,
-    impressions: r.impressions,
-    ctr: Math.round(r.ctr * 10000) / 10000,
-    position: Math.round(r.position * 10) / 10,
-  };
-}
-
-function formatNum(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
-function pctChange(cur: number, prev: number): string {
-  if (prev === 0) return cur === 0 ? "0%" : "+∞";
-  const pct = ((cur - prev) / prev) * 100;
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${Math.round(pct * 10) / 10}%`;
-}
+import type { Metrics } from "../util.js";
 
 function daysBetween(start: string, end: string): number {
   const s = new Date(start + "T00:00:00Z");
@@ -334,7 +311,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
       }
       if (filter_page) {
         autoFilters.push({ dimension: "page", operator: "contains", expression: filter_page });
-        autoDimensions.push("query");
+        autoDimensions.push("page");
       }
       if (filter_device) {
         autoFilters.push({ dimension: "device", operator: "equals", expression: filter_device });
@@ -446,12 +423,12 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
       // Join by keys
       const currentMap = new Map<string, Metrics>();
       for (const r of currentData.rows ?? []) {
-        const key = (r.keys ?? []).join("\0");
+        const key = JSON.stringify(r.keys ?? []);
         currentMap.set(key, r);
       }
       const previousMap = new Map<string, Metrics>();
       for (const r of previousData.rows ?? []) {
-        const key = (r.keys ?? []).join("\0");
+        const key = JSON.stringify(r.keys ?? []);
         previousMap.set(key, r);
       }
 
@@ -467,7 +444,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
 
         const row: Record<string, unknown> = {};
         if (effectiveDimensions) {
-          row.keys = key.split("\0");
+          row.keys = JSON.parse(key) as string[];
         }
         row.current = curMetrics;
         row.previous = prevMetrics;

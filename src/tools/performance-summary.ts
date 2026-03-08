@@ -11,36 +11,13 @@ import {
   resolveSiteUrl,
   daysAgo,
   today,
+  roundMetrics,
+  formatNum,
+  pctChange,
 } from "../util.js";
+import type { Metrics } from "../util.js";
 
 const PERIOD_DAYS: Record<string, number> = { "7d": 7, "28d": 28, "90d": 90 };
-
-interface Metrics {
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  position: number;
-}
-
-function roundMetrics(m: Metrics): Metrics {
-  return {
-    clicks: m.clicks,
-    impressions: m.impressions,
-    ctr: Math.round(m.ctr * 10000) / 10000,
-    position: Math.round(m.position * 10) / 10,
-  };
-}
-
-function pctChange(cur: number, prev: number): string {
-  if (prev === 0) return cur === 0 ? "0%" : "+∞";
-  const pct = ((cur - prev) / prev) * 100;
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${Math.round(pct * 10) / 10}%`;
-}
-
-function formatNum(n: number): string {
-  return n.toLocaleString("en-US");
-}
 
 export function registerPerformanceSummaryTool(
   server: McpServer,
@@ -72,7 +49,7 @@ export function registerPerformanceSummaryTool(
       const endDate = today();
       const startDate = daysAgo(days);
       const prevEndDate = daysAgo(days + 1);
-      const prevStartDate = daysAgo(days * 2);
+      const prevStartDate = daysAgo(days * 2 + 1);
 
       const endpoint = `/sites/${encodeSiteUrl(siteUrl)}/searchAnalytics/query`;
 

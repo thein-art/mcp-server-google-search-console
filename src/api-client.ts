@@ -81,12 +81,13 @@ export class GscApiClient {
   }
 
   private async handleError(res: Response, method: string, url: string): Promise<never> {
+    const text = await res.text();
     let msg: string;
     try {
-      const err = (await res.json()) as { error?: { message?: string } };
-      msg = err.error?.message ?? JSON.stringify(err);
+      const err = JSON.parse(text) as { error?: { message?: string } };
+      msg = err.error?.message ?? text;
     } catch {
-      msg = await res.text();
+      msg = text;
     }
 
     if (res.status === 403) {
