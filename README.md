@@ -1,9 +1,11 @@
 # mcp-server-google-search-console
 
+[![CI](https://img.shields.io/github/actions/workflow/status/thein-art/mcp-server-google-search-console/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/thein-art/mcp-server-google-search-console/actions/workflows/ci.yml)
 [![Node.js >= 22](https://img.shields.io/badge/node-%3E%3D22-brightgreen?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-0098FF?style=flat-square)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/mcp-server-google-search-console?style=flat-square)](https://www.npmjs.com/package/mcp-server-google-search-console)
+[![npm downloads](https://img.shields.io/npm/dm/mcp-server-google-search-console?style=flat-square)](https://www.npmjs.com/package/mcp-server-google-search-console)
 
 Community-built MCP server for the Google Search Console API. Provides search analytics, performance summaries, URL inspection, sitemap management, and property listing through the [Model Context Protocol](https://modelcontextprotocol.io/).
 
