@@ -12,3 +12,4 @@ dist/
 !tsconfig.json
 !.mcp.json
 !glama.json
+!.releaserc.json
