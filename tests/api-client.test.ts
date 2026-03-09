@@ -53,7 +53,7 @@ describe("GscApiClient", () => {
       ok: false,
       status: 403,
       headers: new Headers(),
-      json: async () => ({ error: { message: "Forbidden" } }),
+      text: async () => JSON.stringify({ error: { message: "Forbidden" } }),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -67,7 +67,7 @@ describe("GscApiClient", () => {
       ok: false,
       status: 429,
       headers: new Headers({ "Retry-After": "30" }),
-      json: async () => ({ error: { message: "Rate limit exceeded" } }),
+      text: async () => JSON.stringify({ error: { message: "Rate limit exceeded" } }),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -130,7 +130,7 @@ describe("GscApiClient", () => {
       ok: false,
       status: 500,
       headers: new Headers(),
-      json: async () => ({ error: { message: "Internal Server Error" } }),
+      text: async () => JSON.stringify({ error: { message: "Internal Server Error" } }),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -164,7 +164,7 @@ describe("GscApiClient", () => {
       ok: false,
       status: 403,
       headers: new Headers(),
-      json: async () => ({ error: { message: "User sa@project.iam.gserviceaccount.com does not have access" } }),
+      text: async () => JSON.stringify({ error: { message: "User sa@project.iam.gserviceaccount.com does not have access" } }),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -185,7 +185,7 @@ describe("GscApiClient", () => {
       ok: false,
       status: 401,
       headers: new Headers(),
-      json: async () => ({ error: { message: "Invalid token for sa@project.iam" } }),
+      text: async () => JSON.stringify({ error: { message: "Invalid token for sa@project.iam" } }),
     });
     vi.stubGlobal("fetch", mockFetch);
 

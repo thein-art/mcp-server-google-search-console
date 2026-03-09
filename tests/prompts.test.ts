@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerPrompts } from "../src/prompts.js";
 
@@ -20,7 +21,7 @@ describe("MCP prompts", () => {
       return originalRegisterPrompt(name, config, handler);
     };
 
-    registerPrompts(server);
+    registerPrompts(server, z.string().describe("Site URL"));
   });
 
   it("registers exactly 3 prompts", () => {

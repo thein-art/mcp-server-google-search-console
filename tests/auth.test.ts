@@ -6,6 +6,7 @@ vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
   writeFile: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),
+  chmod: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";

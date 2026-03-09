@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { GscApiClient } from "../../src/api-client.js";
 import { SiteResolver } from "../../src/site-resolver.js";
@@ -63,7 +64,7 @@ describe("search-analytics tool", () => {
       },
     );
 
-    registerSearchAnalyticsTool(server, client, resolver);
+    registerSearchAnalyticsTool(server, client, resolver, z.string().describe("Site URL"));
   });
 
   it("registers the tool with registerTool", () => {
@@ -126,7 +127,7 @@ describe("search-analytics tool", () => {
       ok: false,
       status: 400,
       headers: new Headers(),
-      json: async () => ({ error: { message: "Invalid request" } }),
+      text: async () => JSON.stringify({ error: { message: "Invalid request" } }),
     }));
 
     const result = await registeredHandler({
@@ -230,7 +231,7 @@ describe("search-analytics tool", () => {
       vi.unstubAllGlobals();
     });
 
-    it("auto-adds query dimension when filter_page is set (typical intent: queries for these pages)", async () => {
+    it("auto-adds page dimension when filter_page is set", async () => {
       const mockFetch = mockApiSuccess({ rows: [] });
 
       await registeredHandler({
@@ -239,12 +240,12 @@ describe("search-analytics tool", () => {
       }, mockExtra);
 
       const body = parseBody(mockFetch);
-      expect(body.dimensions).toEqual(["query"]);
+      expect(body.dimensions).toEqual(["page"]);
 
       vi.unstubAllGlobals();
     });
 
-    it("auto-adds query dimension once when both filter_query and filter_page are set", async () => {
+    it("auto-adds query and page dimensions when both filter_query and filter_page are set", async () => {
       const mockFetch = mockApiSuccess({ rows: [] });
 
       await registeredHandler({
@@ -254,7 +255,7 @@ describe("search-analytics tool", () => {
       }, mockExtra);
 
       const body = parseBody(mockFetch);
-      expect(body.dimensions).toEqual(["query"]);
+      expect(body.dimensions).toEqual(["query", "page"]);
 
       vi.unstubAllGlobals();
     });
@@ -646,9 +647,9 @@ describe("search-analytics tool", () => {
       expect(body1.dimensionFilterGroups).toEqual(expectedFilter);
       expect(body2.dimensionFilterGroups).toEqual(expectedFilter);
 
-      // Auto-dimension should be "query"
-      expect(body1.dimensions).toEqual(["query"]);
-      expect(body2.dimensions).toEqual(["query"]);
+      // Auto-dimension should be "page"
+      expect(body1.dimensions).toEqual(["page"]);
+      expect(body2.dimensions).toEqual(["page"]);
 
       vi.unstubAllGlobals();
     });
