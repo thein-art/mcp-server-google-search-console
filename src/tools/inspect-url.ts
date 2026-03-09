@@ -1,9 +1,10 @@
 import { z } from "zod";
+import type { ZodTypeAny } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GscApiClient } from "../api-client.js";
 import type { SiteResolver } from "../site-resolver.js";
 import type { InspectUrlResponse, InspectionResult } from "../types.js";
-import { toolResult, toolError, siteUrlSchema, resolveSiteUrl } from "../util.js";
+import { toolResult, toolError, resolveSiteUrl } from "../util.js";
 
 /** Build a human-readable summary of the inspection result. */
 export function buildInspectionSummary(r: InspectionResult): string {
@@ -79,7 +80,7 @@ export function buildInspectionSummary(r: InspectionResult): string {
   return parts.join(". ") + ".";
 }
 
-export function registerInspectUrlTool(server: McpServer, client: GscApiClient, resolver: SiteResolver) {
+export function registerInspectUrlTool(server: McpServer, client: GscApiClient, resolver: SiteResolver, completableSiteUrl: ZodTypeAny) {
   server.registerTool("inspect_url", {
     title: "Inspect URL",
     description: [
@@ -91,15 +92,21 @@ export function registerInspectUrlTool(server: McpServer, client: GscApiClient, 
     ].join(" "),
     inputSchema: z.object({
       url: z.string().url().describe("The fully-qualified URL to inspect. Must belong to the specified site_url property."),
-      site_url: siteUrlSchema,
+      site_url: completableSiteUrl,
       language_code: z
         .string()
         .describe("IETF BCP-47 language code for localized issue messages (e.g. 'de', 'en-US'). Defaults to 'en-US'.")
         .optional(),
     }),
-  }, async ({ url, site_url, language_code }) => {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  }, async ({ url, site_url, language_code }, { signal }) => {
     try {
-      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url);
+      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url as string);
 
       const body: Record<string, unknown> = {
         inspectionUrl: url,
@@ -110,6 +117,7 @@ export function registerInspectUrlTool(server: McpServer, client: GscApiClient, 
       const data = await client.postInspection<InspectUrlResponse>(
         "/urlInspection/index:inspect",
         body,
+        signal,
       );
 
       const result = data.inspectionResult;

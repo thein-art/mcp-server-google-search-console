@@ -1,15 +1,14 @@
 import { z } from "zod";
+import type { ZodTypeAny } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export function registerPrompts(server: McpServer) {
+export function registerPrompts(server: McpServer, completableSiteUrl: ZodTypeAny) {
   server.registerPrompt("seo_performance_analysis", {
     title: "SEO Performance Analysis",
     description:
       "Guided 5-step SEO performance analysis: Top Queries → Top Pages → Device Split → Country Split → Trends. Produces a structured report with actionable insights.",
     argsSchema: {
-      site_url: z
-        .string()
-        .describe("The site to analyze (e.g. 'example.com' or 'sc-domain:example.com')"),
+      site_url: completableSiteUrl,
       period: z
         .enum(["7d", "28d", "90d"])
         .default("28d")
@@ -68,9 +67,7 @@ export function registerPrompts(server: McpServer) {
     description:
       "URL inspection workflow that checks indexing status for one or more URLs using batch_inspect_urls, then produces a structured coverage report.",
     argsSchema: {
-      site_url: z
-        .string()
-        .describe("The site these URLs belong to (e.g. 'example.com')"),
+      site_url: completableSiteUrl,
       urls: z
         .string()
         .describe("Comma-separated list of URLs to inspect (max 20)"),

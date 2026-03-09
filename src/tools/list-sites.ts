@@ -63,9 +63,15 @@ export function registerListSitesTool(server: McpServer, client: GscApiClient) {
       "Subdir properties exist for scoped analysis (e.g. per-language URL inspection quotas) — use them when the user asks about a specific section.",
       "Properties with 'unverified' permission return 403 on API calls.",
     ].join(" "),
-  }, async () => {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  }, async ({ signal }) => {
     try {
-      const data = await client.get<SiteList>("/sites");
+      const data = await client.get<SiteList>("/sites", signal);
       const sites = data.siteEntry ?? [];
 
       // Build compact entries with classification

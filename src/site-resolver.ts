@@ -155,6 +155,12 @@ export class SiteResolver {
     };
   }
 
+  /** Return all site URLs (for completions and resource listing). */
+  async listSiteUrls(): Promise<string[]> {
+    const sites = await this.getSites();
+    return sites.map((s) => s.siteUrl);
+  }
+
   /** Invalidate the cache (for testing or after site changes). */
   invalidate(): void {
     this.sites = [];

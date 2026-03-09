@@ -1,9 +1,10 @@
 import { z } from "zod";
+import type { ZodTypeAny } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GscApiClient } from "../api-client.js";
 import type { SiteResolver } from "../site-resolver.js";
 import type { SitemapList, WmxSitemap } from "../types.js";
-import { toolResult, toolError, siteUrlSchema, encodeSiteUrl, resolveSiteUrl } from "../util.js";
+import { toolResult, toolError, encodeSiteUrl, resolveSiteUrl } from "../util.js";
 
 interface SitemapSummary {
   path: string;
@@ -41,24 +42,30 @@ export function summarizeSitemap(s: WmxSitemap): SitemapSummary {
   };
 }
 
-export function registerListSitemapsTool(server: McpServer, client: GscApiClient, resolver: SiteResolver) {
+export function registerListSitemapsTool(server: McpServer, client: GscApiClient, resolver: SiteResolver, completableSiteUrl: ZodTypeAny) {
   server.registerTool("list_sitemaps", {
     title: "List Sitemaps",
     description:
       "List all sitemaps submitted for a Google Search Console property. Returns sitemap health summary with errors, warnings, and index rates. Use sitemapIndex to filter child sitemaps of a specific sitemap index.",
     inputSchema: z.object({
-      site_url: siteUrlSchema,
+      site_url: completableSiteUrl,
       sitemapIndex: z.string().url().optional()
         .describe("Filter to only sitemaps within this sitemap index URL (e.g. 'https://example.com/sitemap_index.xml')."),
     }),
-  }, async ({ site_url, sitemapIndex }) => {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  }, async ({ site_url, sitemapIndex }, { signal }) => {
     try {
-      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url);
+      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url as string);
       let path = `/sites/${encodeSiteUrl(siteUrl)}/sitemaps`;
       if (sitemapIndex) {
         path += `?sitemapIndex=${encodeURIComponent(sitemapIndex)}`;
       }
-      const data = await client.get<SitemapList>(path);
+      const data = await client.get<SitemapList>(path, signal);
       const raw = data.sitemap ?? [];
       const sitemaps = raw.map(summarizeSitemap);
 

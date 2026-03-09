@@ -8,33 +8,33 @@ export class GscApiClient {
   constructor(private getToken: TokenProvider) {}
 
   /** GET request to webmasters/v3 API */
-  async get<T>(path: string): Promise<T> {
-    return this.request<T>("GET", `${WEBMASTERS_BASE}${path}`);
+  async get<T>(path: string, signal?: AbortSignal): Promise<T> {
+    return this.request<T>("GET", `${WEBMASTERS_BASE}${path}`, undefined, signal);
   }
 
   /** POST request to webmasters/v3 API */
-  async post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>("POST", `${WEBMASTERS_BASE}${path}`, body);
+  async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>("POST", `${WEBMASTERS_BASE}${path}`, body, signal);
   }
 
   /** PUT request to webmasters/v3 API (returns void) */
-  async put(path: string): Promise<void> {
-    await this.requestVoid("PUT", `${WEBMASTERS_BASE}${path}`);
+  async put(path: string, signal?: AbortSignal): Promise<void> {
+    await this.requestVoid("PUT", `${WEBMASTERS_BASE}${path}`, signal);
   }
 
   /** DELETE request to webmasters/v3 API (returns void) */
-  async delete(path: string): Promise<void> {
-    await this.requestVoid("DELETE", `${WEBMASTERS_BASE}${path}`);
+  async delete(path: string, signal?: AbortSignal): Promise<void> {
+    await this.requestVoid("DELETE", `${WEBMASTERS_BASE}${path}`, signal);
   }
 
   /** POST request to searchconsole/v1 API (URL Inspection) */
-  async postInspection<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>("POST", `${SEARCHCONSOLE_BASE}${path}`, body);
+  async postInspection<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>("POST", `${SEARCHCONSOLE_BASE}${path}`, body, signal);
   }
 
   /** Request that expects a JSON response body. Throws if body is empty. */
-  private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
-    const res = await this.doFetch(method, url, body);
+  private async request<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    const res = await this.doFetch(method, url, body, signal);
     const text = await res.text();
 
     const trimmed = text.trim();
@@ -46,13 +46,13 @@ export class GscApiClient {
   }
 
   /** Request that expects no response body (PUT/DELETE). */
-  private async requestVoid(method: string, url: string): Promise<void> {
-    const res = await this.doFetch(method, url);
+  private async requestVoid(method: string, url: string, signal?: AbortSignal): Promise<void> {
+    const res = await this.doFetch(method, url, undefined, signal);
     // Consume body to free resources
     await res.text();
   }
 
-  private async doFetch(method: string, url: string, body?: unknown): Promise<Response> {
+  private async doFetch(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
     const token = await this.getToken();
 
     const headers: Record<string, string> = {
@@ -60,10 +60,14 @@ export class GscApiClient {
       Accept: "application/json",
     };
 
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
+      : AbortSignal.timeout(TIMEOUT_MS);
+
     const init: RequestInit = {
       method,
       headers,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: combinedSignal,
     };
 
     if (body !== undefined) {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ZodTypeAny } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GscApiClient } from "../api-client.js";
 import type { SiteResolver } from "../site-resolver.js";
@@ -6,7 +7,6 @@ import type { SearchAnalyticsResponse } from "../types.js";
 import {
   toolResult,
   toolError,
-  siteUrlSchema,
   encodeSiteUrl,
   resolveSiteUrl,
   daysAgo,
@@ -23,6 +23,7 @@ export function registerPerformanceSummaryTool(
   server: McpServer,
   client: GscApiClient,
   resolver: SiteResolver,
+  completableSiteUrl: ZodTypeAny,
 ) {
   server.registerTool("get_performance_summary", {
     title: "Performance Summary",
@@ -32,7 +33,7 @@ export function registerPerformanceSummaryTool(
       "One call instead of multiple get_search_analytics calls. Ideal for 'how is the site doing?' questions.",
     ].join(" "),
     inputSchema: z.object({
-      site_url: siteUrlSchema,
+      site_url: completableSiteUrl,
       period: z
         .enum(["7d", "28d", "90d"])
         .describe("Time period to summarize. Default: '28d'.")
@@ -42,9 +43,15 @@ export function registerPerformanceSummaryTool(
         .describe("Search type to filter by. Default: 'web'.")
         .optional(),
     }),
-  }, async ({ site_url, period, search_type }) => {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  }, async ({ site_url, period, search_type }, { signal }) => {
     try {
-      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url);
+      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url as string);
       const days = PERIOD_DAYS[period ?? "28d"];
       const endDate = today();
       const startDate = daysAgo(days);
@@ -65,9 +72,9 @@ export function registerPerformanceSummaryTool(
       };
 
       const [currentData, previousData, topQueriesData] = await Promise.all([
-        client.post<SearchAnalyticsResponse>(endpoint, buildBody(startDate, endDate)),
-        client.post<SearchAnalyticsResponse>(endpoint, buildBody(prevStartDate, prevEndDate)),
-        client.post<SearchAnalyticsResponse>(endpoint, buildBody(startDate, endDate, ["query"], 10)),
+        client.post<SearchAnalyticsResponse>(endpoint, buildBody(startDate, endDate), signal),
+        client.post<SearchAnalyticsResponse>(endpoint, buildBody(prevStartDate, prevEndDate), signal),
+        client.post<SearchAnalyticsResponse>(endpoint, buildBody(startDate, endDate, ["query"], 10), signal),
       ]);
 
       const zeroMetrics: Metrics = { clicks: 0, impressions: 0, ctr: 0, position: 0 };

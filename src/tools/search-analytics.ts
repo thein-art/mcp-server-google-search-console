@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ZodTypeAny } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GscApiClient } from "../api-client.js";
 import type { SiteResolver } from "../site-resolver.js";
@@ -6,7 +7,6 @@ import type { SearchAnalyticsResponse, DimensionFilter, Dimension } from "../typ
 import {
   toolResult,
   toolError,
-  siteUrlSchema,
   dateSchema,
   dimensionsSchema,
   dimensionFilterSchema,
@@ -191,7 +191,7 @@ export function calcCompareDates(
   return { compareStart: fmt(s), compareEnd: fmt(e) };
 }
 
-export function registerSearchAnalyticsTool(server: McpServer, client: GscApiClient, resolver: SiteResolver) {
+export function registerSearchAnalyticsTool(server: McpServer, client: GscApiClient, resolver: SiteResolver, completableSiteUrl: ZodTypeAny) {
   server.registerTool("get_search_analytics", {
     title: "Search Analytics",
     description: [
@@ -204,7 +204,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
       "Country codes: ISO 3166-1 alpha-3 lowercase (e.g. 'deu', 'fra', 'usa'). Device values: DESKTOP, MOBILE, TABLET.",
     ].join(" "),
     inputSchema: z.object({
-      site_url: siteUrlSchema,
+      site_url: completableSiteUrl,
       start_date: dateSchema
         .describe("Start date (YYYY-MM-DD). Defaults to 28 days ago. Note: Google uses PT timezone for dates.")
         .optional(),
@@ -266,6 +266,12 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
         .describe("Aggregate date-dimension rows into buckets. Only applies when 'date' is in dimensions. 'daily': no change (default). 'weekly': ISO week buckets. 'monthly': YYYY-MM buckets. 'auto': ≤14d=daily, 15-60d=weekly, >60d=monthly. Metrics are aggregated: clicks/impressions summed, position weighted by impressions, CTR recalculated.")
         .optional(),
     }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   }, async ({
     site_url,
     start_date,
@@ -285,7 +291,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
     start_row,
     data_state,
     date_granularity,
-  }) => {
+  }, { signal }) => {
     try {
       // Validate comparison params
       if (compare_period && (compare_start_date || compare_end_date)) {
@@ -295,7 +301,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
         throw new Error("Both compare_start_date and compare_end_date must be set together.");
       }
 
-      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url);
+      const { siteUrl, resolvedNote } = await resolveSiteUrl(resolver, site_url as string);
 
       const resolvedStart = start_date ?? daysAgo(28);
       const resolvedEnd = end_date ?? today();
@@ -366,7 +372,7 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
         if (row_limit !== undefined) body.rowLimit = row_limit;
         if (start_row !== undefined) body.startRow = start_row;
 
-        const data = await client.post<SearchAnalyticsResponse>(endpoint, body);
+        const data = await client.post<SearchAnalyticsResponse>(endpoint, body, signal);
 
         let rows: Array<Record<string, unknown>> = (data.rows ?? []).map((r) => ({
           ...(r.keys ? { keys: r.keys } : {}),
@@ -416,8 +422,8 @@ export function registerSearchAnalyticsTool(server: McpServer, client: GscApiCli
       previousBody.rowLimit = apiLimit;
 
       const [currentData, previousData] = await Promise.all([
-        client.post<SearchAnalyticsResponse>(endpoint, currentBody),
-        client.post<SearchAnalyticsResponse>(endpoint, previousBody),
+        client.post<SearchAnalyticsResponse>(endpoint, currentBody, signal),
+        client.post<SearchAnalyticsResponse>(endpoint, previousBody, signal),
       ]);
 
       // Join by keys
