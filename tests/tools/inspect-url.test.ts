@@ -6,6 +6,7 @@ import { registerInspectUrlTool, buildInspectionSummary } from "../../src/tools/
 import type { InspectionResult } from "../../src/types.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal };
 
 function mockApiSuccess(data: unknown) {
   const mockFetch = vi.fn().mockResolvedValue({
@@ -257,7 +258,7 @@ describe("buildInspectionSummary", () => {
 describe("inspect_url tool", () => {
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+  let handler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -268,7 +269,7 @@ describe("inspect_url tool", () => {
     const originalRegisterTool = server.registerTool.bind(server);
     vi.spyOn(server, "registerTool").mockImplementation(
       // @ts-expect-error - simplified mock
-      (_name: string, _config: unknown, h: (args: Record<string, unknown>) => Promise<unknown>) => {
+      (_name: string, _config: unknown, h: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>) => {
         handler = h;
         return originalRegisterTool(_name, _config, h);
       },
@@ -295,7 +296,7 @@ describe("inspect_url tool", () => {
     const result = await handler({
       url: "https://example.com/page",
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     expect(parsed._summary).toContain("Index: PASS");
@@ -314,7 +315,7 @@ describe("inspect_url tool", () => {
       url: "https://example.com/page",
       site_url: "https://example.com/",
       language_code: "de",
-    });
+    }, mockExtra);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.languageCode).toBe("de");
@@ -330,7 +331,7 @@ describe("inspect_url tool", () => {
     await handler({
       url: "https://example.com/page",
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain("searchconsole.googleapis.com");
@@ -350,7 +351,7 @@ describe("inspect_url tool", () => {
     const result = await handler({
       url: "https://example.com/page",
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     expect((result as { isError: boolean }).isError).toBe(true);
 

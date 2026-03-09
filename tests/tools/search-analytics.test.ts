@@ -11,6 +11,7 @@ import {
 } from "../../src/tools/search-analytics.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal };
 
 function mockApiSuccess(data: unknown) {
   const mockFetch = vi.fn().mockResolvedValue({
@@ -44,7 +45,7 @@ describe("search-analytics tool", () => {
   let server: McpServer;
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let registeredHandler: (args: Record<string, unknown>) => Promise<unknown>;
+  let registeredHandler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -56,7 +57,7 @@ describe("search-analytics tool", () => {
     const originalRegisterTool = server.registerTool.bind(server);
     vi.spyOn(server, "registerTool").mockImplementation(
       // @ts-expect-error - simplified mock
-      (name: string, config: unknown, handler: (args: Record<string, unknown>) => Promise<unknown>) => {
+      (name: string, config: unknown, handler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>) => {
         registeredHandler = handler;
         return originalRegisterTool(name, config, handler);
       },
@@ -91,7 +92,7 @@ describe("search-analytics tool", () => {
       end_date: "2024-01-31",
       dimensions: ["query"],
       row_limit: 10,
-    });
+    }, mockExtra);
 
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("/searchAnalytics/query"),
@@ -114,7 +115,7 @@ describe("search-analytics tool", () => {
       site_url: "https://example.com/",
       start_date: "2024-02-01",
       end_date: "2024-01-01",
-    });
+    }, mockExtra);
 
     expect((result as { isError: boolean }).isError).toBe(true);
     expect((result as { content: Array<{ text: string }> }).content[0].text).toContain("Invalid date range");
@@ -130,7 +131,7 @@ describe("search-analytics tool", () => {
 
     const result = await registeredHandler({
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     expect((result as { isError: boolean }).isError).toBe(true);
     expect((result as { content: Array<{ text: string }> }).content[0].text).toContain("Invalid request");
@@ -145,7 +146,7 @@ describe("search-analytics tool", () => {
       await registeredHandler({
         site_url: "https://example.com/",
         filter_query: "seo",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toEqual([
@@ -164,7 +165,7 @@ describe("search-analytics tool", () => {
       await registeredHandler({
         site_url: "https://example.com/",
         filter_page: "/blog/",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toEqual([
@@ -183,7 +184,7 @@ describe("search-analytics tool", () => {
       await registeredHandler({
         site_url: "https://example.com/",
         filter_device: "MOBILE",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toEqual([
@@ -202,7 +203,7 @@ describe("search-analytics tool", () => {
       await registeredHandler({
         site_url: "https://example.com/",
         filter_country: "deu",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toEqual([
@@ -221,7 +222,7 @@ describe("search-analytics tool", () => {
       await registeredHandler({
         site_url: "https://example.com/",
         filter_query: "seo",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensions).toEqual(["query"]);
@@ -235,7 +236,7 @@ describe("search-analytics tool", () => {
       await registeredHandler({
         site_url: "https://example.com/",
         filter_page: "/blog/",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensions).toEqual(["query"]);
@@ -250,7 +251,7 @@ describe("search-analytics tool", () => {
         site_url: "https://example.com/",
         filter_query: "seo",
         filter_page: "/blog/",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensions).toEqual(["query"]);
@@ -265,7 +266,7 @@ describe("search-analytics tool", () => {
         site_url: "https://example.com/",
         filter_device: "DESKTOP",
         filter_country: "usa",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensions).toBeUndefined();
@@ -280,7 +281,7 @@ describe("search-analytics tool", () => {
         site_url: "https://example.com/",
         filter_query: "seo",
         dimensions: ["page"],
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensions).toEqual(["page"]);
@@ -301,7 +302,7 @@ describe("search-analytics tool", () => {
         site_url: "https://example.com/",
         filter_query: "seo",
         filters: [{ dimension: "country", operator: "equals", expression: "deu" }],
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toEqual([
@@ -326,7 +327,7 @@ describe("search-analytics tool", () => {
         filter_page: "/blog/",
         filter_device: "MOBILE",
         filter_country: "deu",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toEqual([
@@ -349,7 +350,7 @@ describe("search-analytics tool", () => {
 
       await registeredHandler({
         site_url: "https://example.com/",
-      });
+      }, mockExtra);
 
       const body = parseBody(mockFetch);
       expect(body.dimensionFilterGroups).toBeUndefined();
@@ -429,7 +430,7 @@ describe("search-analytics tool", () => {
         end_date: "2026-03-01",
         compare_period: "previous_period",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       // Two API calls made
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -466,7 +467,7 @@ describe("search-analytics tool", () => {
         end_date: "2026-03-01",
         compare_period: "previous_period",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       const rows = parsed.rows as Array<Record<string, unknown>>;
@@ -490,7 +491,7 @@ describe("search-analytics tool", () => {
         end_date: "2026-03-01",
         compare_period: "previous_period",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       const rows = parsed.rows as Array<Record<string, unknown>>;
@@ -511,7 +512,7 @@ describe("search-analytics tool", () => {
         compare_start_date: "2025-02-23",
         compare_end_date: "2025-03-01",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       // Check the second call uses the explicit comparison dates
       const body2 = parseBody(mockFetch, 1);
@@ -529,7 +530,7 @@ describe("search-analytics tool", () => {
         compare_period: "previous_period",
         compare_start_date: "2025-01-01",
         compare_end_date: "2025-01-31",
-      });
+      }, mockExtra);
 
       expect((result as { isError: boolean }).isError).toBe(true);
       expect((result as { content: Array<{ text: string }> }).content[0].text).toContain("Cannot use compare_period together");
@@ -543,7 +544,7 @@ describe("search-analytics tool", () => {
       const result = await registeredHandler({
         site_url: "https://example.com/",
         compare_start_date: "2025-01-01",
-      });
+      }, mockExtra);
 
       expect((result as { isError: boolean }).isError).toBe(true);
       expect((result as { content: Array<{ text: string }> }).content[0].text).toContain("must be set together");
@@ -561,7 +562,7 @@ describe("search-analytics tool", () => {
         compare_period: "previous_period",
         dimensions: ["query"],
         row_limit: 10,
-      });
+      }, mockExtra);
 
       // Both API calls should use oversampled limit, not the user's row_limit
       const body1 = parseBody(mockFetch, 0);
@@ -586,7 +587,7 @@ describe("search-analytics tool", () => {
         compare_period: "previous_period",
         dimensions: ["query"],
         row_limit: 3,
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed.rowCount).toBe(3);
@@ -616,7 +617,7 @@ describe("search-analytics tool", () => {
         end_date: "2026-03-01",
         compare_period: "previous_period",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       const note = parsed._comparison as string;
@@ -636,7 +637,7 @@ describe("search-analytics tool", () => {
         end_date: "2026-03-01",
         compare_period: "previous_period",
         filter_page: "/magazin/",
-      });
+      }, mockExtra);
 
       // Both calls should have the filter
       const body1 = parseBody(mockFetch, 0);
@@ -676,7 +677,7 @@ describe("search-analytics tool", () => {
         end_date: "2026-03-01",
         compare_period: "previous_period",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       const rows = parsed.rows as Array<{ keys: string[]; delta?: { clicks: number } }>;
@@ -703,7 +704,7 @@ describe("search-analytics tool", () => {
         site_url: "https://example.com/",
         start_date: "2024-01-01",
         end_date: "2024-01-28",
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed._summary).toContain("28 days");
@@ -726,7 +727,7 @@ describe("search-analytics tool", () => {
         start_date: "2024-01-01",
         end_date: "2024-01-28",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed._summary).toContain("2 rows");
@@ -743,7 +744,7 @@ describe("search-analytics tool", () => {
         site_url: "https://example.com/",
         start_date: "2024-01-01",
         end_date: "2024-01-28",
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed._summary).toContain("no data");
@@ -763,7 +764,7 @@ describe("search-analytics tool", () => {
         end_date: "2024-01-28",
         compare_period: "previous_period",
         dimensions: ["query"],
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed._summary).toContain("vs prev");
@@ -900,7 +901,7 @@ describe("search-analytics tool", () => {
         end_date: "2024-01-28",
         dimensions: ["date"],
         date_granularity: "weekly",
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed.dateGranularity).toBe("weekly");
@@ -923,7 +924,7 @@ describe("search-analytics tool", () => {
         end_date: "2024-01-20",
         dimensions: ["date"],
         date_granularity: "auto",
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed.dateGranularity).toBeUndefined(); // stays daily, not set
@@ -945,7 +946,7 @@ describe("search-analytics tool", () => {
         end_date: "2024-03-31",
         dimensions: ["query"],
         date_granularity: "monthly",
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed.dateGranularity).toBeUndefined();
@@ -970,7 +971,7 @@ describe("search-analytics tool", () => {
         end_date: "2024-03-31",
         dimensions: ["date"],
         date_granularity: "monthly",
-      });
+      }, mockExtra);
 
       const parsed = parseResult(result);
       expect(parsed.dateGranularity).toBe("monthly");

@@ -5,6 +5,7 @@ import { SiteResolver } from "../../src/site-resolver.js";
 import { registerBatchInspectTool } from "../../src/tools/batch-inspect.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal, sendNotification: vi.fn(), _meta: undefined };
 
 function parseResult(result: unknown): Record<string, unknown> {
   return JSON.parse((result as { content: Array<{ text: string }> }).content[0].text);
@@ -13,7 +14,7 @@ function parseResult(result: unknown): Record<string, unknown> {
 describe("batch_inspect_urls tool", () => {
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+  let handler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -24,7 +25,7 @@ describe("batch_inspect_urls tool", () => {
     const originalRegisterTool = server.registerTool.bind(server);
     vi.spyOn(server, "registerTool").mockImplementation(
       // @ts-expect-error - simplified mock
-      (_name: string, _config: unknown, h: (args: Record<string, unknown>) => Promise<unknown>) => {
+      (_name: string, _config: unknown, h: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>) => {
         handler = h;
         return originalRegisterTool(_name, _config, h);
       },
@@ -66,7 +67,7 @@ describe("batch_inspect_urls tool", () => {
         "https://example.com/page3",
       ],
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     expect(parsed._summary).toBe("3 URLs inspected: 2 indexed 1 not indexed");
@@ -110,7 +111,7 @@ describe("batch_inspect_urls tool", () => {
         "https://example.com/page3",
       ],
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     const results = parsed.results as Array<Record<string, unknown>>;
@@ -130,7 +131,7 @@ describe("batch_inspect_urls tool", () => {
     const result = await handler({
       urls: ["https://example.com/page1"],
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     const results = parsed.results as Array<Record<string, unknown>>;
@@ -147,7 +148,7 @@ describe("batch_inspect_urls tool", () => {
       urls: ["https://example.com/page1", "https://example.com/page2"],
       site_url: "https://example.com/",
       language_code: "de",
-    });
+    }, mockExtra);
 
     const mockFetch = vi.mocked(globalThis.fetch);
     for (const call of mockFetch.mock.calls) {
@@ -165,7 +166,7 @@ describe("batch_inspect_urls tool", () => {
     const result = await handler({
       urls: ["https://example.com/page1"],
       site_url: "example.com",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     expect(parsed._resolved).toContain("example.com");
@@ -180,7 +181,7 @@ describe("batch_inspect_urls tool", () => {
     const result = await handler({
       urls: ["https://example.com/page1"],
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     const r = (parsed.results as Array<Record<string, unknown>>)[0];
@@ -221,7 +222,7 @@ describe("batch_inspect_urls tool", () => {
     }));
 
     const urls = Array.from({ length: 10 }, (_, i) => `https://example.com/page${i}`);
-    await handler({ urls, site_url: "https://example.com/" });
+    await handler({ urls, site_url: "https://example.com/" }, mockExtra);
 
     expect(maxConcurrent).toBeLessThanOrEqual(5);
     expect(maxConcurrent).toBeGreaterThan(1); // Should actually be parallel
@@ -243,7 +244,7 @@ describe("batch_inspect_urls tool", () => {
         "https://example.com/page3",
       ],
       site_url: "https://example.com/",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     expect(parsed._summary).toBe("3 URLs inspected: 3 indexed");

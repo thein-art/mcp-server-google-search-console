@@ -5,6 +5,7 @@ import { SiteResolver } from "../../src/site-resolver.js";
 import { registerSiteDetailsTool } from "../../src/tools/site-details.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal };
 
 function mockApiSuccess(data: unknown) {
   const mockFetch = vi.fn().mockResolvedValue({
@@ -22,7 +23,7 @@ function parseResult(result: unknown): Record<string, unknown> {
 describe("get_site tool", () => {
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+  let handler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -33,7 +34,7 @@ describe("get_site tool", () => {
     const originalRegisterTool = server.registerTool.bind(server);
     vi.spyOn(server, "registerTool").mockImplementation(
       // @ts-expect-error - simplified mock
-      (_name: string, _config: unknown, h: (args: Record<string, unknown>) => Promise<unknown>) => {
+      (_name: string, _config: unknown, h: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>) => {
         handler = h;
         return originalRegisterTool(_name, _config, h);
       },
@@ -51,7 +52,7 @@ describe("get_site tool", () => {
       permissionLevel: "siteOwner",
     });
 
-    const result = await handler({ site_url: "https://example.com/" });
+    const result = await handler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
     expect(parsed.siteUrl).toBe("https://example.com/");
     expect(parsed.permissionLevel).toBe("siteOwner");
@@ -67,7 +68,7 @@ describe("get_site tool", () => {
       permissionLevel: "siteOwner",
     });
 
-    const result = await handler({ site_url: "example.com" });
+    const result = await handler({ site_url: "example.com" }, mockExtra);
     const parsed = parseResult(result);
     expect(parsed._resolved).toContain("Resolved");
     expect(parsed.siteUrl).toBe("sc-domain:example.com");
@@ -83,7 +84,7 @@ describe("get_site tool", () => {
       json: async () => ({ error: { message: "Not found" } }),
     }));
 
-    const result = await handler({ site_url: "https://unknown.com/" });
+    const result = await handler({ site_url: "https://unknown.com/" }, mockExtra);
     expect((result as { isError: boolean }).isError).toBe(true);
 
     vi.unstubAllGlobals();
@@ -95,7 +96,7 @@ describe("get_site tool", () => {
       permissionLevel: "siteOwner",
     });
 
-    await handler({ site_url: "https://example.com/" });
+    await handler({ site_url: "https://example.com/" }, mockExtra);
 
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain(encodeURIComponent("https://example.com/"));

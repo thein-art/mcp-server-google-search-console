@@ -4,6 +4,7 @@ import { GscApiClient } from "../../src/api-client.js";
 import { registerListSitesTool } from "../../src/tools/list-sites.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal };
 
 function mockApiSuccess(data: unknown) {
   const mockFetch = vi.fn().mockResolvedValue({
@@ -20,7 +21,7 @@ function parseResult(result: unknown): Record<string, unknown> {
 
 describe("list_sites tool", () => {
   let client: GscApiClient;
-  let handler: () => Promise<unknown>;
+  let handler: (...args: unknown[]) => Promise<unknown>;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -29,7 +30,7 @@ describe("list_sites tool", () => {
     const originalRegisterTool = server.registerTool.bind(server);
     vi.spyOn(server, "registerTool").mockImplementation(
       // @ts-expect-error - simplified mock
-      (_name: string, _config: unknown, h: () => Promise<unknown>) => {
+      (_name: string, _config: unknown, h: (...args: unknown[]) => Promise<unknown>) => {
         handler = h;
         return originalRegisterTool(_name, _config, h);
       },
@@ -48,7 +49,7 @@ describe("list_sites tool", () => {
       ],
     });
 
-    const result = await handler();
+    const result = await handler(mockExtra, {});
     const parsed = parseResult(result);
     expect(parsed.total).toBe(1);
     expect(parsed.sites).toHaveLength(1);
@@ -59,7 +60,7 @@ describe("list_sites tool", () => {
   it("handles empty site list", async () => {
     mockApiSuccess({ siteEntry: [] });
 
-    const result = await handler();
+    const result = await handler(mockExtra, {});
     const parsed = parseResult(result);
     expect(parsed.total).toBe(0);
     expect(parsed.sites).toEqual([]);
@@ -70,7 +71,7 @@ describe("list_sites tool", () => {
   it("handles missing siteEntry", async () => {
     mockApiSuccess({});
 
-    const result = await handler();
+    const result = await handler(mockExtra, {});
     const parsed = parseResult(result);
     expect(parsed.total).toBe(0);
     expect(parsed.sites).toEqual([]);
@@ -86,7 +87,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].url).toBe("sc-domain:example.com");
@@ -104,7 +105,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].permission).toBe("full");
@@ -119,7 +120,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].url).toBe("https://example.com/blog/");
@@ -138,7 +139,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
 
@@ -157,7 +158,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
 
@@ -176,7 +177,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].default).toBe("sc-domain:example.com");
@@ -192,7 +193,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].default).toBe("https://example.com/");
@@ -208,7 +209,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].default).toBe("https://example.com/");
@@ -225,7 +226,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].permission).toBe("unverified");
@@ -242,7 +243,7 @@ describe("list_sites tool", () => {
         ],
       });
 
-      const result = await handler();
+      const result = await handler(mockExtra, {});
       const parsed = parseResult(result);
       const sites = parsed.sites as Array<Record<string, unknown>>;
       expect(sites[0].url).toBe("https://verified.com/");
@@ -260,7 +261,7 @@ describe("list_sites tool", () => {
       json: async () => ({ error: { message: "Internal error" } }),
     }));
 
-    const result = await handler();
+    const result = await handler(mockExtra, {});
     expect((result as { isError: boolean }).isError).toBe(true);
 
     vi.unstubAllGlobals();
@@ -271,7 +272,7 @@ describe("list_sites tool", () => {
       mockApiSuccess({
         siteEntry: [{ siteUrl: "https://a.com/", permissionLevel: "siteOwner" }],
       });
-      const parsed = parseResult(await handler());
+      const parsed = parseResult(await handler(mockExtra, {}));
       expect((parsed.sites as Array<Record<string, unknown>>)[0].permission).toBe("owner");
       vi.unstubAllGlobals();
     });
@@ -280,7 +281,7 @@ describe("list_sites tool", () => {
       mockApiSuccess({
         siteEntry: [{ siteUrl: "https://a.com/", permissionLevel: "siteRestrictedUser" }],
       });
-      const parsed = parseResult(await handler());
+      const parsed = parseResult(await handler(mockExtra, {}));
       expect((parsed.sites as Array<Record<string, unknown>>)[0].permission).toBe("restricted");
       vi.unstubAllGlobals();
     });

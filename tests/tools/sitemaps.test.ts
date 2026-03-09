@@ -7,18 +7,21 @@ import { registerSubmitSitemapTool } from "../../src/tools/submit-sitemap.js";
 import { registerDeleteSitemapTool } from "../../src/tools/delete-sitemap.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal };
+
+type Handler = (args: Record<string, unknown>, extra: { signal: AbortSignal }) => Promise<unknown>;
 
 function captureHandler(
   server: McpServer,
   registerFn: (server: McpServer, client: GscApiClient, resolver: SiteResolver) => void,
   client: GscApiClient,
   resolver: SiteResolver,
-): (args: Record<string, unknown>) => Promise<unknown> {
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+): Handler {
+  let handler: Handler;
   const originalRegisterTool = server.registerTool.bind(server);
   vi.spyOn(server, "registerTool").mockImplementation(
     // @ts-expect-error - simplified mock
-    (_name: string, _config: unknown, h: (args: Record<string, unknown>) => Promise<unknown>) => {
+    (_name: string, _config: unknown, h: Handler) => {
       handler = h;
       return originalRegisterTool(_name, _config, h);
     },
@@ -52,7 +55,7 @@ function parseResult(result: unknown): Record<string, unknown> {
 describe("list_sitemaps", () => {
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+  let handler: Handler;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -66,7 +69,7 @@ describe("list_sitemaps", () => {
   it("returns empty sitemaps array when none exist", async () => {
     mockFetchJson({ sitemap: undefined });
 
-    const result = await handler({ site_url: "https://example.com/" });
+    const result = await handler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
 
     expect(parsed.sitemaps).toEqual([]);
@@ -106,7 +109,7 @@ describe("list_sitemaps", () => {
       ],
     });
 
-    const result = await handler({ site_url: "https://example.com/" });
+    const result = await handler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
 
     const sitemaps = parsed.sitemaps as Array<Record<string, unknown>>;
@@ -152,7 +155,7 @@ describe("list_sitemaps", () => {
       ],
     });
 
-    const result = await handler({ site_url: "https://example.com/" });
+    const result = await handler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
 
     const sitemaps = parsed.sitemaps as Array<Record<string, unknown>>;
@@ -170,7 +173,7 @@ describe("list_sitemaps", () => {
     await handler({
       site_url: "https://example.com/",
       sitemapIndex: "https://example.com/sitemap_index.xml",
-    });
+    }, mockExtra);
 
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain("sitemapIndex=");
@@ -187,7 +190,7 @@ describe("list_sitemaps", () => {
       json: async () => ({ error: { message: "Forbidden" } }),
     }));
 
-    const result = await handler({ site_url: "https://example.com/" });
+    const result = await handler({ site_url: "https://example.com/" }, mockExtra);
     expect((result as { isError: boolean }).isError).toBe(true);
 
     vi.unstubAllGlobals();
@@ -197,7 +200,7 @@ describe("list_sitemaps", () => {
 describe("submit_sitemap", () => {
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+  let handler: Handler;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -214,7 +217,7 @@ describe("submit_sitemap", () => {
     const result = await handler({
       site_url: "https://example.com/",
       feedpath: "https://example.com/sitemap.xml",
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     expect(parsed.success).toBe(true);
@@ -234,7 +237,7 @@ describe("submit_sitemap", () => {
     await handler({
       site_url: "https://example.com/",
       feedpath: "https://example.com/sitemap.xml",
-    });
+    }, mockExtra);
 
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain(encodeURIComponent("https://example.com/sitemap.xml"));
@@ -253,7 +256,7 @@ describe("submit_sitemap", () => {
     const result = await handler({
       site_url: "https://example.com/",
       feedpath: "https://example.com/sitemap.xml",
-    });
+    }, mockExtra);
 
     expect((result as { isError: boolean }).isError).toBe(true);
 
@@ -264,7 +267,7 @@ describe("submit_sitemap", () => {
 describe("delete_sitemap", () => {
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let handler: (args: Record<string, unknown>) => Promise<unknown>;
+  let handler: Handler;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -282,7 +285,7 @@ describe("delete_sitemap", () => {
       site_url: "https://example.com/",
       feedpath: "https://example.com/sitemap.xml",
       confirm: false,
-    });
+    }, mockExtra);
 
     expect((result as { isError: boolean }).isError).toBe(true);
     expect((result as { content: Array<{ text: string }> }).content[0].text).toContain("not confirmed");
@@ -297,7 +300,7 @@ describe("delete_sitemap", () => {
       site_url: "https://example.com/",
       feedpath: "https://example.com/sitemap.xml",
       confirm: true,
-    });
+    }, mockExtra);
 
     const parsed = parseResult(result);
     expect(parsed.success).toBe(true);
@@ -323,7 +326,7 @@ describe("delete_sitemap", () => {
       site_url: "https://example.com/",
       feedpath: "https://example.com/nonexistent.xml",
       confirm: true,
-    });
+    }, mockExtra);
 
     expect((result as { isError: boolean }).isError).toBe(true);
 

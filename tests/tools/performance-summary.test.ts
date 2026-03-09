@@ -5,6 +5,7 @@ import { SiteResolver } from "../../src/site-resolver.js";
 import { registerPerformanceSummaryTool } from "../../src/tools/performance-summary.js";
 
 const mockTokenProvider = async () => "ya29.mock-token";
+const mockExtra = { signal: undefined as unknown as AbortSignal };
 
 function mockApiSequence(...responses: unknown[]) {
   let callIndex = 0;
@@ -28,7 +29,7 @@ describe("performance-summary tool", () => {
   let server: McpServer;
   let client: GscApiClient;
   let resolver: SiteResolver;
-  let registeredHandler: (args: Record<string, unknown>) => Promise<unknown>;
+  let registeredHandler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
     client = new GscApiClient(mockTokenProvider);
@@ -40,7 +41,7 @@ describe("performance-summary tool", () => {
     const originalRegisterTool = server.registerTool.bind(server);
     vi.spyOn(server, "registerTool").mockImplementation(
       // @ts-expect-error - simplified mock
-      (name: string, config: unknown, handler: (args: Record<string, unknown>) => Promise<unknown>) => {
+      (name: string, config: unknown, handler: (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<unknown>) => {
         registeredHandler = handler;
         return originalRegisterTool(name, config, handler);
       },
@@ -71,7 +72,7 @@ describe("performance-summary tool", () => {
       ] },
     );
 
-    const result = await registeredHandler({ site_url: "https://example.com/" });
+    const result = await registeredHandler({ site_url: "https://example.com/" }, mockExtra);
     expect(mockFetch).toHaveBeenCalledTimes(3);
 
     const parsed = parseResult(result);
@@ -92,7 +93,7 @@ describe("performance-summary tool", () => {
       { rows: [{ keys: ["example query"], clicks: 2345, impressions: 20000, ctr: 0.117, position: 3.0 }] },
     );
 
-    const result = await registeredHandler({ site_url: "https://example.com/" });
+    const result = await registeredHandler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
 
     expect(parsed._summary).toContain("28-day summary");
@@ -109,7 +110,7 @@ describe("performance-summary tool", () => {
       { rows: [] },
     );
 
-    const result = await registeredHandler({ site_url: "https://example.com/", period: "7d" });
+    const result = await registeredHandler({ site_url: "https://example.com/", period: "7d" }, mockExtra);
     const parsed = parseResult(result);
 
     expect((parsed.period as Record<string, unknown>).label).toBe("7d");
@@ -121,7 +122,7 @@ describe("performance-summary tool", () => {
   it("passes search_type to API calls", async () => {
     const mockFetch = mockApiSequence({ rows: [] }, { rows: [] }, { rows: [] });
 
-    await registeredHandler({ site_url: "https://example.com/", search_type: "image" });
+    await registeredHandler({ site_url: "https://example.com/", search_type: "image" }, mockExtra);
 
     for (let i = 0; i < 3; i++) {
       const body = parseBody(mockFetch, i);
@@ -134,7 +135,7 @@ describe("performance-summary tool", () => {
   it("handles zero metrics gracefully", async () => {
     mockApiSequence({ rows: [] }, { rows: [] }, { rows: [] });
 
-    const result = await registeredHandler({ site_url: "https://example.com/" });
+    const result = await registeredHandler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
 
     expect(parsed.current).toEqual({ clicks: 0, impressions: 0, ctr: 0, position: 0 });
@@ -149,7 +150,7 @@ describe("performance-summary tool", () => {
     vi.spyOn(resolver, "resolve").mockResolvedValue({ siteUrl: "sc-domain:example.com", resolved: true });
     mockApiSequence({ rows: [] }, { rows: [] }, { rows: [] });
 
-    const result = await registeredHandler({ site_url: "example.com" });
+    const result = await registeredHandler({ site_url: "example.com" }, mockExtra);
     const parsed = parseResult(result);
 
     expect(parsed._resolved).toContain("Resolved");
@@ -165,7 +166,7 @@ describe("performance-summary tool", () => {
       json: async () => ({ error: { message: "Access denied" } }),
     }));
 
-    const result = await registeredHandler({ site_url: "https://example.com/" });
+    const result = await registeredHandler({ site_url: "https://example.com/" }, mockExtra);
     expect((result as { isError: boolean }).isError).toBe(true);
 
     vi.unstubAllGlobals();
@@ -178,7 +179,7 @@ describe("performance-summary tool", () => {
       { rows: [] },
     );
 
-    const result = await registeredHandler({ site_url: "https://example.com/" });
+    const result = await registeredHandler({ site_url: "https://example.com/" }, mockExtra);
     const parsed = parseResult(result);
 
     expect((parsed.delta_pct as Record<string, string>).clicks).toBe("+50%");
@@ -191,7 +192,7 @@ describe("performance-summary tool", () => {
   it("top queries limited to 10 via API rowLimit", async () => {
     const mockFetch = mockApiSequence({ rows: [] }, { rows: [] }, { rows: [] });
 
-    await registeredHandler({ site_url: "https://example.com/" });
+    await registeredHandler({ site_url: "https://example.com/" }, mockExtra);
 
     // Third call is top queries — should have rowLimit 10
     const body = parseBody(mockFetch, 2);
